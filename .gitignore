@@ -5,3 +5,4 @@ __pycache__/
 *.db
 .env
 postgres_data/
+VIDEO_SCRIPT.md
