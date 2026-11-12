@@ -184,6 +184,32 @@ def fbs_ship(data: FbsActionRequest, db: Session = Depends(get_db)):
         return finish(db, op, f"FBS №{sh.id} отправлен клиенту. Товар числится в пути.")
     except Exception: db.rollback(); raise
 
+@app.post("/api/fbs/deliver")
+def fbs_deliver(data: FbsActionRequest, db: Session = Depends(get_db)):
+    try:
+        op, dup = start_operation(db, data.idempotency_key, "FBS_DELIVER")
+        if dup:
+            db.rollback()
+            return duplicate(op)
+
+        sh = db.get(Shipment, data.shipment_id)
+        if sh is None or sh.kind != "FBS" or sh.status != "IN_TRANSIT":
+            raise HTTPException(409, "Отправление FBS не найдено или уже завершено")
+
+        sh.status = "DELIVERED"
+        sh.completed_at = datetime.now(timezone.utc)
+        log_move(
+            db, op, sh.product_id, sh.quantity,
+            "Доставка FBS клиенту",
+            source=sh.source_warehouse_id,
+            note="Доставка подтверждена сотрудником"
+        )
+        return finish(db, op, f"Заказ FBS №{sh.id} отмечен как доставленный.")
+    except Exception:
+        db.rollback()
+        raise
+
+
 @app.post("/api/fbs/cancel")
 def fbs_cancel(data: FbsActionRequest, db: Session = Depends(get_db)):
     try:
